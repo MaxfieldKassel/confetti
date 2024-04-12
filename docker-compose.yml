@@ -1,9 +1,8 @@
-version: '3.8'
 services:
   web:
     build: .
     ports:
-      - "80:80"
+      - "5612:80"
     restart: always
     env_file:
       - .env

@@ -31,9 +31,12 @@ RUN npm install --only=production
 # Copy built and obfuscated JavaScript from the build stage
 COPY --from=build /usr/src/app/dist ./dist
 
-# Copy public files
- COPY --from=build /usr/src/app/public ./public
+#Copy private files from previous build
+COPY --from=build /usr/src/app/private ./private
+
+#Copy the confetti software into the dist folder:
+RUN cp ./node_modules/canvas-confetti/dist/confetti.browser.js ./dist/
 
 EXPOSE 80
 
-CMD node dist/server.js
+CMD node private/server.js
