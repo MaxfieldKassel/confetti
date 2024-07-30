@@ -1,6 +1,10 @@
-# Confetti Website
+# 🎉 [Confetti Website](https://🎉🎉🎉.ws) 🎉
 
 This project is a simple web application that displays celebratory messages with confetti effects. It includes functionalities for generating custom URLs with encrypted messages and serving the site using Docker.
+
+## Offical Site
+
+[🎉🎉🎉.ws](https://🎉🎉🎉.ws)
 
 ## Project Structure
 
