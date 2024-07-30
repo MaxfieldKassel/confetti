@@ -1,10 +1,15 @@
 # 🎉 [Confetti Website](https://🎉🎉🎉.ws) 🎉
 
-This project is a simple web application that displays celebratory messages with confetti effects. It includes functionalities for generating custom URLs with encrypted messages and serving the site using Docker.
+<div align="center">
+  <img src="website-example.gif" alt="Website Example"/>
+  <br>
+  <a href="https://🎉🎉🎉.ws">🎉🎉🎉.ws</a>
+  <br>
+  <br>
+</div>
 
-## Offical Site
+This project is a simple web application that displays celebratory messages with confetti effects. It includes functionality for generating custom, encrypted URLs, ensuring that the message can only be viewed by opening the URL. No data is stored on the server, making the application highly scalable and secure.
 
-[🎉🎉🎉.ws](https://🎉🎉🎉.ws)
 
 ## Project Structure
 
@@ -32,6 +37,7 @@ This project is a simple web application that displays celebratory messages with
 
 Create a `.env` file in the project root with the following variables:
 
+(The secret key is used for encrypting the messages)
 ```
 SECRET_KEY=your_secret_key
 LINKEDIN_URL=your_linkedin_url
