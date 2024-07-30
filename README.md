@@ -13,7 +13,6 @@ This project is a simple web application that displays celebratory messages with
 - `docker-compose.yml`: Docker Compose configuration file for running the web server.
 - `Dockerfile`: Dockerfile for building the project image.
 - `LICENSE`: The MIT License for this project.
-- `output.txt`: (Placeholder for any output files or logs).
 - `package.json`: Project dependencies and build scripts.
 - `private/`: Directory containing server-side scripts and views.
   - `messages.json`: JSON file with daily motivational messages.
