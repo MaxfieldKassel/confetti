@@ -114,7 +114,13 @@ function generateCustomUrl() {
 // Function to handle link copying, also manages UI updates post-copy
 function copyLinkHandler(customUrl) {
     return function () {
-        navigator.clipboard.writeText(window.location.origin + customUrl)
+        // check for punycode url, and override with emoji url (current workaround for punycode issue)
+        if (window.location.origin.includes('xn--dk8haa.ws')) {
+            const startURL = 'https://🎉🎉🎉.ws'
+        } else {
+            const startURL = window.location.origin
+        }
+        navigator.clipboard.writeText(startURL + customUrl)
             .then(() => {
                 mainTextConfetti("Link copied to clipboard!", '#00FF00');
                 document.getElementById('custom-url-link').style.display = 'block';
