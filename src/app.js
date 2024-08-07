@@ -1,20 +1,39 @@
 let fullPageEffectActive = false;
-function continuousSideConfetti() {
-    if (!fullPageEffectActive) { //Don't do an effect if there is another full page effect going on.
+let lastTime = 0;
+let particleCount = 7;
+
+function continuousSideConfetti(timestamp) {
+    if (!fullPageEffectActive) {
+        // Calculate the time difference between frames
+        let timeDifference = timestamp - lastTime;
+
+        // If the time difference is too high, it means the frame rate is low
+        if (timeDifference > 16) {
+            // Reduce particle count to alleviate the load
+            particleCount = Math.max(3, particleCount - 1);
+        } else {
+            // Increase particle count if the frame rate is good
+            particleCount = Math.min(7, particleCount + 1);
+        }
+
         // Launch confetti from the left edge
         confetti({
-            particleCount: 7,
+            particleCount: particleCount,
             angle: 60,
             spread: 55,
             origin: { x: 0 } // From the left side
         });
+
         // Launch confetti from the right edge
         confetti({
-            particleCount: 7,
+            particleCount: particleCount,
             angle: 120,
             spread: 55,
             origin: { x: 1 } // From the right side
         });
+
+        // Update the last time
+        lastTime = timestamp;
     }
 
     // Continue indefinitely
@@ -117,7 +136,7 @@ function copyLinkHandler(customUrl) {
         const startURL = window.location.origin.includes('xn--dk8haa.ws')
             ? 'https://🎉🎉🎉.ws'
             : window.location.origin;
-            
+
         navigator.clipboard.writeText(startURL + customUrl)
             .then(() => {
                 mainTextConfetti("Link copied to clipboard!", '#00FF00');
