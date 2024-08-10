@@ -1,94 +1,129 @@
-body, html {
+body,
+html {
     height: 100%;
+    width: 100%;
     margin: 0;
     display: flex;
     justify-content: center;
     align-items: center;
-    flex-direction: column; /* Change to column to stack items vertically */
+    flex-direction: column;
     background-color: #f0f0f0;
-    overflow: hidden; /* Prevent scrolling */
+    overflow: hidden;
 }
+
 #celebration-container {
-    position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
-    text-align: center; /* Center the text horizontally */
-    padding: 20px; /* Add some padding */
-    box-sizing: border-box; /* Include padding in the element's size */
-    width: 100%; /* Full width */
-    max-width: 600px; /* Max width for the text container */
+    text-align: center;
+    padding: 20px;
+    width: 100%;
+    max-width: 600px;
 }
+
 #celebration-text {
-    position: relative; /* Position relative to the container */
-    z-index: 2; /* Ensure it's above the confetti */
-    font-size: 2em;
-    font-weight: bold;
-    user-select: none; /* Prevent text selection */
-    -webkit-user-select: none; /* Safari */
-    -moz-user-select: none; /* Firefox */
-    -ms-user-select: none; /* IE/Edge */
-    pointer-events: none; /* Prevent text from capturing mouse events */
-    white-space: pre-wrap; /* Ensure that the text wraps */
-}
-canvas {
-    position: fixed; /* Full-screen canvas for confetti */
-    top: 0;
-    left: 0;
-    z-index: 1; /* Behind the text */
-    pointer-events: none; /* Allow clicks to pass through */
-}
-#linkedin-link {
-    position: fixed; /* Fix it at the bottom */
-    bottom: 15px; /* 15px from the bottom */
-    text-align: right; /* Center it to the right */
-    width: 100%; /* Take full width to ensure centering */
-    font-size: 15px; /* Larger font size for visibility */
-    right: 15px; /* 15px to the right */
-}
-#linkedin-link a {
-    pointer-events: auto; /* Ensure the link is clickable */
-    user-select: none; /* Prevent text selection */
-}
-#linkedin-link, #linkedin-link * {
-    user-select: none; /* Prevent text selection for all elements within #linkedin-link */
-    -webkit-user-select: none; /* Safari */
-    -moz-user-select: none; /* Firefox */
-    -ms-user-select: none; /* IE/Edge */
-}
-#custom-url-link {
-    position: fixed;
-    bottom: 0px;
-    left: 0px;
-    font-size: 15px;
-    cursor: pointer;
-    padding: 15px 15px;
-    pointer-events: auto;
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    border: 0;
-    background: none;
-    color: inherit;
-    touch-action: manipulation;  
-    z-index: 1000; 
+    pointer-events: none;
+    font-size: 2em;
+    font-weight: bold;
+    user-select: none;
+    white-space: pre-wrap;
+}
+
+canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+#custom-url-link {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 15px;
+    z-index: 1000;
 }
 
 #custom-url-input {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
     position: fixed;
     bottom: 15px;
     left: 15px;
-    display: none; /* Initially hidden */
-    touch-action: manipulation;  
-    z-index: 1000; 
+    display: none;
+    z-index: 1000;
+}
+
+#generate-link {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    cursor: pointer;
+    color: blue;
+    text-decoration: underline;
+    margin-left: 10px;
 }
 
 #generated-url-display {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
     position: fixed;
     bottom: 15px;
     left: 15px;
-    display: none; /* Initially hidden */
-    touch-action: manipulation;  
-    z-index: 1000; 
+    display: none;
+    z-index: 1000;
+}
+
+#theme-toggle {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    position: fixed;
+    bottom: 15px;
+    right: 15px;
+    z-index: 1000;
+    cursor: pointer;
+}
+
+body.dark-mode {
+    background-color: #121212;
+    color: #ffffff;
+}
+
+body.dark-mode #celebration-text {
+    color: #ffffff;
+}
+
+body.dark-mode #custom-url-link,
+body.dark-mode #generate-link {
+    color: #ffffff;
+}
+
+body.dark-mode #custom-url-input input {
+    background-color: #333333;
+    border: 1px solid #555555;
+    color: #ffffff;
+}
+
+body.dark-mode #generated-url-display {
+    background-color: #1e1e1e;
+    border: 1px solid #333333;
+    color: #ffffff;
 }

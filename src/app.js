@@ -181,3 +181,23 @@ function handleKeyPress(event) {
         event.preventDefault(); // Prevent default action (form submission)
     }
 }
+
+
+function toggleTheme() {
+    const body = document.body;
+    const button = document.getElementById('theme-toggle-button');
+
+    body.classList.toggle('dark-mode');
+
+    if (body.classList.contains('dark-mode')) {
+        button.textContent = 'Light Mode';
+    } else {
+        button.textContent = 'Dark Mode';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        toggleTheme(); //Assuming light mode by default
+    }
+});

@@ -47,9 +47,7 @@ app.get('/', (req, res) => {
         const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
         const message = messages[dayOfYear % messages.length];
         res.render('index', {
-            message,
-            linkedInUrl: process.env.LINKEDIN_URL,
-            linkedInName: process.env.LINKEDIN_NAME
+            message
         });
     });
 });
@@ -67,9 +65,7 @@ app.get('/custom/:text', (req, res) => {
         let decryptedText = sanitizeHtml(decrypt(decodeURIComponent(req.params.text)), { allowedTags: [], allowedAttributes: {} }).trim();
         if (!decryptedText) throw new Error('Decrypted text is empty or whitespace only.');
         res.render('index', {
-            message: decryptedText,
-            linkedInUrl: process.env.LINKEDIN_URL,
-            linkedInName: process.env.LINKEDIN_NAME
+            message: decryptedText
         });
     } catch (error) {
         res.redirect('/');

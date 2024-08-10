@@ -1,30 +1,20 @@
 # 🎉 [Confetti Website](https://🎉🎉🎉.ws) 🎉
 
 <div align="center">
-  <img src="website-example.gif" alt="Website Example"/>
+<div style="display: inline-block; width: 49%;">
+    <img src="dark-mode.gif" alt="Dark Mode" style="max-width: 100%; height: auto;"/>
+    Dark Mode
+  </div>
+<div style="display: inline-block; width: 49%;">
+    <img src="light-mode.gif" alt="Light Mode" style="max-width: 100%; height: auto;"/>
+    Light Mode
+  </div>
+  
   <br>
-  <a href="https://🎉🎉🎉.ws">🎉🎉🎉.ws</a>
-  <br>
+  <h1><a href="https://🎉🎉🎉.ws">🎉🎉🎉.ws</a></h1>
   <br>
 </div>
-
-This project is a simple web application that displays celebratory messages with confetti effects. It includes functionality for generating custom, encrypted URLs, ensuring that the message can only be viewed by opening the URL. No data is stored on the server, making the application highly scalable and secure.
-
-
-## Project Structure
-
-- `build.js`: Script to minify JavaScript files from the `src` directory and output them to the `dist` directory.
-- `dist/`: Directory containing the minified CSS and JavaScript files.
-- `docker-compose.yml`: Docker Compose configuration file for running the web server.
-- `Dockerfile`: Dockerfile for building the project image.
-- `LICENSE`: The MIT License for this project.
-- `package.json`: Project dependencies and build scripts.
-- `private/`: Directory containing server-side scripts and views.
-  - `messages.json`: JSON file with daily motivational messages.
-  - `server.js`: Express server handling routes and encryption.
-  - `views/index.ejs`: EJS template for rendering the homepage.
-- `src/`: Directory containing source JavaScript files.
-  - `app.js`: Client-side JavaScript for handling confetti effects and custom URL generation.
+This project is a simple web application that displays celebratory messages with confetti effects. It includes functionality for generating custom, encrypted URLs, ensuring that the message can only be viewed by opening the URL. No data is stored on the server, making the application highly scalable and secure. It also include dark and light mode that uses the users default on page open.
 
 ## Usage
 
@@ -37,11 +27,31 @@ This project is a simple web application that displays celebratory messages with
 
 Create a `.env` file in the project root with the following variables:
 
-(The secret key is used for encrypting the messages)
+The secret key is used for encrypting the messages to be stored in the URL. It has to be 32 characters long.
 ```
-SECRET_KEY=your_secret_key
-LINKEDIN_URL=your_linkedin_url
-LINKEDIN_NAME=your_name
+SECRET_KEY=this_is_a_valid_32_character_key
+```
+
+#### How to Generate a 32-Character Secret Key
+
+You can generate a valid 32-character secret key using the following commands:
+
+**macOS and Linux:**
+
+1. Using OpenSSL:
+  ```bash
+    openssl rand -hex 16
+  ```
+   
+2. Using dd:
+  ```bash
+    $(dd if=/dev/urandom bs=16 count=1 2>/dev/null | xxd -p -c 32)
+  ```
+
+**Windows (PowerShell):**
+
+```powershell
+  [System.BitConverter]::ToString((New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes(16)).Replace("-", "")
 ```
 
 ### Building and Running
@@ -102,10 +112,6 @@ Express server handling the main routes:
 - Home route (`/`): Renders the homepage with a motivational message.
 - Custom URL generation (`/generate-url`): Generates a custom URL with an encrypted message.
 - Custom text route (`/custom/:text`): Decrypts and displays the custom message.
-
-### Example Custom URL
-
-To generate a custom URL, enter a message in the input box and click "Generate". The application creates an encrypted URL that displays the custom message when accessed.
 
 ### License
 
