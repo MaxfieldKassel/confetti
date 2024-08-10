@@ -63,7 +63,7 @@ You can generate a valid 32-character secret key using the following commands:
     docker-compose up --build
     ```
 
-2. Access the web application at `http://localhost:5612`.
+2. Access the web application at `http://localhost:80`.
 
 #### Local Development
 
