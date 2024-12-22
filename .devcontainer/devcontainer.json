@@ -1,0 +1,24 @@
+{
+    "name": "Confetti Website",
+    "dockerFile": "../Dockerfile",
+    "context": "..",
+    "build": {
+        "target": "dev"
+    },
+    "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true
+    },
+    "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "eg2.vscode-npm-script",
+        "ms-azuretools.vscode-docker"
+    ],
+    "forwardPorts": [3000],
+    "postCreateCommand": "npm install",
+    "mounts": [
+        "source=${localWorkspaceFolder},target=/usr/src/app,type=bind,consistency=cached"
+    ],
+    "remoteUser": "node"
+}
