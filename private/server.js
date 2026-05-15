@@ -6,7 +6,7 @@ const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
-const PORT = 80;
+const PORT = process.env.PORT || 80;
 
 // Configure Express to use EJS as the template engine and set the views directory
 app.set('views', path.join(__dirname, 'views'));
