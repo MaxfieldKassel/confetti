@@ -54,7 +54,7 @@
               script = ''
                 export SECRET_KEY=$(cat "$CREDENTIALS_DIRECTORY/secret-key")
                 export PORT=${toString cfg.port}
-                exec ${pkgs.nodejs_20}/bin/node ${confettiPackage}/private/server.js
+                exec ${pkgs.nodejs_24}/bin/node ${confettiPackage}/private/server.js
               '';
             };
 
@@ -75,7 +75,7 @@
 
           npmDepsHash = "sha256-n6uda1H/ANIX67dbLbczunP2LUL9+goUpzed/hhtOLs=";
 
-          nodejs = pkgs.nodejs_20;
+          nodejs = pkgs.nodejs_24;
 
           buildPhase = ''
             npm run build
@@ -95,7 +95,7 @@
 
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            nodejs_20
+            nodejs_24
           ];
 
           shellHook = ''

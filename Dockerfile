@@ -1,5 +1,5 @@
 # Base stage
-FROM node:14 AS base
+FROM node:24 AS base
 
 # Set working directory
 WORKDIR /usr/src/app
@@ -32,7 +32,7 @@ RUN npm install --save-dev nodemon
 CMD ["npx", "nodemon", "private/server.js"]
 
 # Production stage
-FROM node:14 AS production
+FROM node:24 AS production
 
 # Set working directory
 WORKDIR /usr/src/app
