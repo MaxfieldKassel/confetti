@@ -1,37 +1,51 @@
-require('dotenv').config();
+'use strict';
+
+// Builds the front end into dist/:
+//   dist/app.js     = canvas-confetti + src/app.js, bundled and minified/mangled
+//   dist/styles.css = src/styles.css, minified
+// No runtime dependencies or external requests: everything is served locally.
+
 const fs = require('fs');
 const path = require('path');
 const UglifyJS = require('uglify-js');
 
-// Function to minify JS files
-function minifyJs(srcDir, distDir) {
-    fs.readdir(srcDir, (err, files) => {
-        if (err) {
-            console.error('Failed to list files in directory:', err);
-            return;
-        }
+const SRC = path.join(__dirname, 'src');
+const DIST = path.join(__dirname, 'dist');
 
-        files.forEach(file => {
-            if (path.extname(file) === '.js') {
-                const filePath = path.join(srcDir, file);
-                const result = UglifyJS.minify(fs.readFileSync(filePath, 'utf8'));
-                if (result.error) {
-                    console.error('UglifyJS error:', result.error);
-                    return;
-                }
-
-                const distPath = path.join(distDir, file);
-                // Ensure the output directory exists
-                fs.mkdirSync(distDir, { recursive: true });
-
-                fs.writeFileSync(distPath, result.code);
-                console.log(`Minified ${file} successfully.`);
-            }
-        });
+function buildJs() {
+    const confetti = fs.readFileSync(require.resolve('canvas-confetti/dist/confetti.browser.js'), 'utf8');
+    const app = fs.readFileSync(path.join(SRC, 'app.js'), 'utf8');
+    // One enclosing scope so nothing but `window.confetti` leaks into globals.
+    const bundle = `(function () {\n${confetti}\n;\n${app}\n})();\n`;
+    const result = UglifyJS.minify(bundle, {
+        compress: { passes: 2 },
+        mangle: true,
+        output: { comments: false },
     });
+    if (result.error) throw result.error;
+    for (const warning of result.warnings || []) console.warn(warning);
+    return result.code;
 }
 
-// move all files from src to dist after minifying them
-const srcJsDir = path.join(__dirname, 'src');
-const distJsDir = path.join(__dirname, 'dist');
-minifyJs(srcJsDir, distJsDir);
+function minifyCss(css) {
+    return css
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\s*([{}:;,>])\s*/g, '$1')
+        .replace(/;}/g, '}')
+        .trim();
+}
+
+function write(name, contents) {
+    fs.writeFileSync(path.join(DIST, name), contents);
+    console.log(`Built dist/${name} (${Buffer.byteLength(contents)} bytes)`);
+}
+
+try {
+    fs.mkdirSync(DIST, { recursive: true });
+    write('app.js', buildJs());
+    write('styles.css', minifyCss(fs.readFileSync(path.join(SRC, 'styles.css'), 'utf8')));
+} catch (err) {
+    console.error('Build failed:', err);
+    process.exit(1);
+}

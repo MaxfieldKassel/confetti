@@ -22,15 +22,20 @@ html {
 }
 
 #celebration-text {
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
     pointer-events: none;
     font-size: 2em;
     font-weight: bold;
-    user-select: none;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+#celebration-text,
+#custom-url-link,
+#custom-url-input,
+#generated-url-display,
+#theme-toggle {
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 canvas {
@@ -41,25 +46,29 @@ canvas {
     pointer-events: none;
 }
 
+/* Text-style buttons: keep the look of plain text links. */
+#custom-url-link,
+#generate-link,
+#theme-toggle-button {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
 #custom-url-link {
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
     position: fixed;
     bottom: 0;
     left: 0;
     font-size: 15px;
-    cursor: pointer;
     padding: 15px;
     z-index: 1000;
 }
 
-#custom-url-input {
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
+#custom-url-input,
+#generated-url-display {
     position: fixed;
     bottom: 15px;
     left: 15px;
@@ -68,38 +77,16 @@ canvas {
 }
 
 #generate-link {
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    cursor: pointer;
     color: blue;
     text-decoration: underline;
     margin-left: 10px;
 }
 
-#generated-url-display {
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    position: fixed;
-    bottom: 15px;
-    left: 15px;
-    display: none;
-    z-index: 1000;
-}
-
 #theme-toggle {
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
     position: fixed;
     bottom: 15px;
     right: 15px;
     z-index: 1000;
-    cursor: pointer;
 }
 
 body.dark-mode {
@@ -107,11 +94,6 @@ body.dark-mode {
     color: #ffffff;
 }
 
-body.dark-mode #celebration-text {
-    color: #ffffff;
-}
-
-body.dark-mode #custom-url-link,
 body.dark-mode #generate-link {
     color: #ffffff;
 }

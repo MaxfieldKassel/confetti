@@ -6,39 +6,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Confetti (🎉🎉🎉.ws) is a web app that displays celebratory messages with confetti effects. Users can generate custom encrypted URLs containing messages — no data is stored server-side. Supports dark/light mode based on user's system preference.
 
+Goals: keep it small. Front end is minimal, minified/mangled, and has no external runtime requests (no CDNs). Server avoids dependencies beyond `express` and `ejs`.
+
 ## Build & Run Commands
 
 ```bash
 npm install              # Install dependencies
-npm run build            # Minify src/ JS files into dist/ (runs build.js with UglifyJS)
-node private/server.js   # Start the Express server on port 80
-docker-compose up --build  # Build and run via Docker
+npm run build            # Bundle canvas-confetti + src/app.js -> dist/app.js, minify src/styles.css -> dist/styles.css
+npm test                 # node --test (test/)
+PORT=3000 npm start      # Start the server (needs SECRET_KEY in env or .env)
 ```
 
-No test suite exists (`npm test` is a no-op).
-
-### Nix
+### Nix (production path)
 
 ```bash
-nix develop          # Enter dev shell with Node.js
-nix build            # Build the full package
+nix develop                  # Dev shell with Node.js 26
+nix build                    # Package (runs build + tests); bin/confetti wrapper
+nix build .#dockerImage      # Docker image tarball: docker load < result
 ```
 
-## Environment Setup
+After changing `package-lock.json`, update `npmDepsHash` in `flake.nix` (build once; Nix prints the expected hash).
 
-Requires a `.env` file with a 32-character `SECRET_KEY` used for AES-256-CTR encryption of custom URL messages. Generate with: `openssl rand -hex 16`
+## Environment
+
+`SECRET_KEY` (32 bytes, `openssl rand -hex 16`) or `SECRET_KEY_FILE`; optional `PORT` (80), `LOG_LEVEL` (info), `LOG_FORMAT` (json/text), `TRUST_PROXY`, `RATE_LIMIT_PER_MINUTE` (30, 0 = off). A `.env` file is loaded via `process.loadEnvFile()`. The server exits at startup if the key is invalid.
 
 ## Architecture
 
-**Build pipeline:** `build.js` reads JS files from `src/`, minifies them with UglifyJS, and outputs to `dist/`. The `dist/` directory also contains `styles.css` and static assets served directly by Express.
+**Build (`build.js`):** UglifyJS bundles `canvas-confetti/dist/confetti.browser.js` + `src/app.js` inside one IIFE into `dist/app.js`; a small regex minifier writes `dist/styles.css`. Build output is gitignored; `dist/confetti.png` is committed.
 
-**Server (`private/server.js`):** Express app using EJS templates. Three routes:
-- `GET /` — renders homepage with a daily motivational message from `private/messages.json` (cycled by day-of-year)
-- `POST /generate-url` — encrypts user text (AES-256-CTR + HMAC verification) into a URL-safe string, returns the custom URL path
-- `GET /custom/:text` — decrypts the URL parameter and renders the page with that message
+**Server (`private/server.js`):** `createApp()` (exported for tests) + `start()` (env, signals, graceful shutdown). Routes:
+- `GET /` — daily message from `private/messages.json` (UTC day of year)
+- `POST /generate-url` — encrypts text into `/custom/<token>`; max 500 chars; in-memory per-IP rate limit
+  - v1 token: base64url(`0x01` | 12-byte IV | ciphertext | 16-byte tag), AES-256-GCM, key = HKDF(SECRET_KEY), version byte as AAD
+  - legacy token (still decrypted, never issued): hex `iv:ciphertext:hmac`, AES-256-CTR + HMAC-SHA256 with the raw key; detected by `:`
+- `GET /custom/:token` — decrypts and renders; invalid tokens redirect to `/`
+- `GET /healthz` — `ok`
 
-All user input is sanitized with `sanitize-html` (no tags/attributes allowed).
+Messages are stored verbatim; safety comes from EJS `<%= %>` escaping and `textContent` on the client (do not add extra HTML escaping — it double-escapes). Strict CSP (`script-src 'self'`, no inline scripts/handlers; `worker-src blob:` for canvas-confetti's worker).
 
-**Client (`src/app.js`):** Handles continuous side-streaming confetti, click/touch confetti bursts, custom URL generation UI, clipboard copying, and theme toggling. Uses the `canvas-confetti` library loaded as `confetti.browser.js` from dist.
+**Logging (`private/logger.js`):** dependency-free JSON-lines logger. One `request` line per request with `reqId` (also `X-Request-Id` header). Never log message text or tokens — paths are redacted to `/custom/:token`.
 
-**Docker:** Multi-stage Dockerfile with base, build, dev (nodemon), and production stages. Production runs on port 80.
+**Client (`src/app.js`):** IIFE; side-streaming confetti, pointerdown bursts, custom URL UI, clipboard copy, theme toggle. All handlers attached in JS.

@@ -2,11 +2,11 @@
 
 <div align="center">
 <div style="display: inline-block; width: 49%;">
-    <img src="dark-mode.gif" alt="Dark Mode" style="max-width: 100%; height: auto;"/>
+    <img src="dark-mode.webp" alt="Dark Mode" style="max-width: 100%; height: auto;"/>
     Dark Mode
   </div>
 <div style="display: inline-block; width: 49%;">
-    <img src="light-mode.gif" alt="Light Mode" style="max-width: 100%; height: auto;"/>
+    <img src="light-mode.webp" alt="Light Mode" style="max-width: 100%; height: auto;"/>
     Light Mode
   </div>
   
@@ -14,104 +14,92 @@
   <h1><a href="https://🎉🎉🎉.ws">🎉🎉🎉.ws</a></h1>
   <br>
 </div>
-This project is a simple web application that displays celebratory messages with confetti effects. It includes functionality for generating custom, encrypted URLs, ensuring that the message can only be viewed by opening the URL. No data is stored on the server, making the application highly scalable and secure. It also include dark and light mode that uses the users default on page open.
+This project is a simple web application that displays celebratory messages with confetti effects. It includes functionality for generating custom URLs encrypted with AES-256-GCM, ensuring that the message can only be viewed by opening the URL. No data is stored on the server, making the application highly scalable and secure. It also includes dark and light mode, defaulting to the user's system preference.
 
 ## Usage
 
 ### Prerequisites
 
-- Docker and Docker Compose installed.
-- Node.js installed for local development and building.
+- [Nix](https://nixos.org) with flakes to build the package / Docker image.
+- Node.js 24+ (26 LTS recommended) for local development (or use `nix develop`).
 
 ### Environment Variables
 
-Create a `.env` file in the project root with the following variables:
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SECRET_KEY` | — (required) | 32-character key used to encrypt messages into URLs. |
+| `SECRET_KEY_FILE` | — | Read the key from this file instead (Docker/systemd secrets). |
+| `PORT` | `80` | Port to listen on. |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` or `silent`. |
+| `LOG_FORMAT` | `json` (`text` on a TTY) | `json` = one object per line, `text` = human readable. |
+| `RATE_LIMIT_PER_MINUTE` | `30` | Max links each client IP can create per minute (`0` disables). In-memory, per process. |
+| `TRUST_PROXY` | off | Express [trust proxy](https://expressjs.com/en/guide/behind-proxies.html) value (`true`, hop count, `loopback`, subnets). Set it behind a reverse proxy so client IPs are logged and rate limited correctly. |
 
-The secret key is used for encrypting the messages to be stored in the URL. It has to be 32 characters long.
+Locally these can go in a `.env` file in the project root (loaded automatically; real environment variables win). The server refuses to start if the key is missing or not 32 bytes.
+
 ```
 SECRET_KEY=this_is_a_valid_32_character_key
 ```
 
 #### How to Generate a 32-Character Secret Key
 
-You can generate a valid 32-character secret key using the following commands:
-
 **macOS and Linux:**
 
-1. Using OpenSSL:
-  ```bash
-    openssl rand -hex 16
-  ```
-   
-2. Using dd:
-  ```bash
-    $(dd if=/dev/urandom bs=16 count=1 2>/dev/null | xxd -p -c 32)
-  ```
+```bash
+openssl rand -hex 16
+```
+
+or
+
+```bash
+dd if=/dev/urandom bs=16 count=1 2>/dev/null | xxd -p -c 32
+```
 
 **Windows (PowerShell):**
 
 ```powershell
-  [System.BitConverter]::ToString((New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes(16)).Replace("-", "")
+[System.BitConverter]::ToString((New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes(16)).Replace("-", "")
 ```
 
 ### Building and Running
 
-#### Using Docker
+#### Docker image (via Nix)
 
-1. Build and run the Docker containers:
-    ```
-    docker-compose up --build
-    ```
+```bash
+nix build .#dockerImage
+docker load < result
+docker run -p 80:80 -e SECRET_KEY=... confetti:1.2.0
+```
 
-2. Access the web application at `http://localhost:80`.
+The image runs as an unprivileged user, contains only `node` (slim) and the production dependencies, and logs JSON to stdout (`docker logs`). The plain package is `nix build` (runs the tests as part of the build), and there is a NixOS module at `nixosModules.default` (`services.confetti`).
 
 #### Local Development
 
-1. Install dependencies:
-    ```
-    npm install
-    ```
+```bash
+npm install
+npm run build   # bundles + minifies the front end into dist/
+npm test
+PORT=3000 npm start
+```
 
-2. Build the project:
-    ```
-    npm run build
-    ```
+Or `nix develop` for a shell with the right Node version.
 
-3. Start the server:
-    ```
-    node private/server.js
-    ```
+### Logging
 
-4. Access the web application at `http://localhost`.
+Every request produces one log line (method, path, status, duration, IP, user agent, request ID). The request ID is also returned in the `X-Request-Id` header, so a user-reported problem can be matched to its log line. Custom URL requests include `tokenVersion` (`v1` or `legacy`). Rejected ones are logged at `warn` with the reason (`malformed`, `auth_failed` — e.g. after a key rotation — `unknown_version` or `empty`). Rate-limited clients get a `429` and one `warn` line per window. Unexpected errors are logged at `error` with a stack trace, and startup/shutdown are logged too.
 
-### Directory Descriptions
+**Message contents and URL tokens are never logged** (custom URLs appear as `/custom/:token`). `GET /healthz` returns `ok` for health checks and is only logged at `debug`.
 
-#### `build.js`
+### Project Layout
 
-This script reads JavaScript files from the `src` directory, minifies them using `UglifyJS`, and outputs the minified files to the `dist` directory. It ensures the output directory exists before writing the minified files.
-
-#### `dist/styles.css`
-
-Contains styles for the web application, including layout settings for the confetti effect and link elements.
-
-#### `docker-compose.yml`
-
-Defines the Docker service for the web application, exposing it on port 5612.
-
-#### `Dockerfile`
-
-Multi-stage build Dockerfile to install dependencies, build the project, and prepare the production environment.
-
-#### `private/messages.json`
-
-Contains a list of motivational messages displayed on the homepage based on the day of the year.
-
-#### `private/server.js`
-
-Express server handling the main routes:
-- Home route (`/`): Renders the homepage with a motivational message.
-- Custom URL generation (`/generate-url`): Generates a custom URL with an encrypted message.
-- Custom text route (`/custom/:text`): Decrypts and displays the custom message.
+- `src/app.js`, `src/styles.css` — front-end sources.
+- `build.js` — bundles `canvas-confetti` + `src/app.js` into a single minified `dist/app.js` and minifies the CSS. No CDNs or external requests at runtime.
+- `dist/` — static files served by Express (build output + `confetti.png`).
+- `private/server.js` — Express server: `/`, `POST /generate-url`, `/custom/:token`, `/healthz`.
+- `private/logger.js` — tiny dependency-free structured logger.
+- `private/messages.json` — daily messages, chosen by UTC day of the year.
+- `test/` — `node --test` suite.
+- `flake.nix` — package, Docker image, dev shell and NixOS module.
 
 ### License
 
