@@ -1,52 +1,19 @@
-# Base stage
-FROM node:24 AS base
+# Alternative to the Nix-built image (`nix build .#dockerImage`).
 
-# Set working directory
+FROM node:26-slim AS build
 WORKDIR /usr/src/app
-
-# Copy package files and install dependencies
 COPY package*.json ./
-
-# Install all dependencies
-RUN npm install
-
-# Copy the entire project directory
+RUN npm ci
 COPY . .
+RUN npm run build && npm test && npm prune --omit=dev
 
-# Build stage
-FROM base AS build
-
-# Run the build script
-RUN npm run build
-
-# Development stage
-FROM base AS dev
-
-# Expose the development server's port
-EXPOSE 3000
-
-# Install additional development dependencies
-RUN npm install --save-dev nodemon
-
-# Command to run the development server
-CMD ["npx", "nodemon", "private/server.js"]
-
-# Production stage
-FROM node:24 AS production
-
-# Set working directory
+FROM node:26-slim AS production
+ENV NODE_ENV=production LOG_FORMAT=json PORT=80
 WORKDIR /usr/src/app
-
-# Copy only production dependencies
-COPY package*.json ./
-RUN npm install --only=production
-
-# Copy built files and private folder from the build stage
+COPY --from=build /usr/src/app/package.json ./
+COPY --from=build /usr/src/app/node_modules ./node_modules
 COPY --from=build /usr/src/app/dist ./dist
 COPY --from=build /usr/src/app/private ./private
-
-# Expose the production server's port
+USER node
 EXPOSE 80
-
-# Command to run the production server
 CMD ["node", "private/server.js"]

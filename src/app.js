@@ -1,203 +1,141 @@
-let fullPageEffectActive = false;
-let lastTime = 0;
-let particleCount = 7;
+(function () {
+    'use strict';
 
-function continuousSideConfetti(timestamp) {
-    if (!fullPageEffectActive) {
-        // Calculate the time difference between frames
-        let timeDifference = timestamp - lastTime;
+    var MAX_PARTICLES = 7;
+    var MIN_PARTICLES = 3;
+    var SLOW_FRAME_MS = 16;
+    var EFFECT_DURATION_MS = 3000;
+    var SHORT_HOST = 'xn--dk8haa.ws';
+    var DISPLAY_ORIGIN = 'https://🎉🎉🎉.ws';
 
-        // If the time difference is too high, it means the frame rate is low
-        if (timeDifference > 16) {
-            // Reduce particle count to alleviate the load
-            particleCount = Math.max(3, particleCount - 1);
-        } else {
-            // Increase particle count if the frame rate is good
-            particleCount = Math.min(7, particleCount + 1);
+    var celebrationText = document.getElementById('celebration-text');
+    var customUrlLink = document.getElementById('custom-url-link');
+    var customUrlInput = document.getElementById('custom-url-input');
+    var customText = document.getElementById('custom-text');
+    var generateButton = document.getElementById('generate-link');
+    var urlDisplay = document.getElementById('generated-url-display');
+    var themeButton = document.getElementById('theme-toggle-button');
+
+    var fullPageEffectActive = false;
+    var lastTime = 0;
+    var particleCount = MAX_PARTICLES;
+
+    // Continuous confetti from both sides, scaled down on slow devices.
+    function sideConfetti(timestamp) {
+        if (!fullPageEffectActive) {
+            if (lastTime) {
+                particleCount = timestamp - lastTime > SLOW_FRAME_MS
+                    ? Math.max(MIN_PARTICLES, particleCount - 1)
+                    : Math.min(MAX_PARTICLES, particleCount + 1);
+            }
+            confetti({ particleCount: particleCount, angle: 60, spread: 55, origin: { x: 0 } });
+            confetti({ particleCount: particleCount, angle: 120, spread: 55, origin: { x: 1 } });
+            lastTime = timestamp;
         }
+        requestAnimationFrame(sideConfetti);
+    }
+    requestAnimationFrame(sideConfetti);
 
-        // Launch confetti from the left edge
+    // Burst at the pointer. pointerdown covers mouse, touch and pen with a
+    // single event, so taps no longer fire twice (touchstart + click).
+    document.addEventListener('pointerdown', function (e) {
+        if (fullPageEffectActive || (e.target.closest && e.target.closest('a'))) return;
         confetti({
-            particleCount: particleCount,
-            angle: 60,
-            spread: 55,
-            origin: { x: 0 } // From the left side
+            particleCount: 20,
+            spread: 70,
+            origin: { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight }
         });
+    });
 
-        // Launch confetti from the right edge
-        confetti({
-            particleCount: particleCount,
-            angle: 120,
-            spread: 55,
-            origin: { x: 1 } // From the right side
-        });
+    // Temporarily replace the main text with a status message and a burst.
+    function flashMessage(text, color) {
+        if (fullPageEffectActive) return;
+        var originalText = celebrationText.textContent;
+        celebrationText.textContent = text;
+        fullPageEffectActive = true;
 
-        // Update the last time
-        lastTime = timestamp;
+        confetti.reset();
+        confetti({ particleCount: 100, spread: 160, startVelocity: 30, origin: { y: 0.6 }, colors: [color] });
+
+        setTimeout(function () {
+            celebrationText.textContent = originalText;
+            fullPageEffectActive = false;
+        }, EFFECT_DURATION_MS);
     }
 
-    // Continue indefinitely
-    requestAnimationFrame(continuousSideConfetti);
-}
+    function showError(text) {
+        flashMessage(text || 'Error creating link!', '#FF0000');
+    }
 
-continuousSideConfetti();
+    customUrlLink.addEventListener('click', function () {
+        customUrlInput.style.display = 'block';
+        customUrlLink.style.display = 'none';
+        urlDisplay.style.display = 'none';
+        customText.focus();
+    });
 
-function triggerConfetti(e) {
-    // Check if the target or any of its parents is a link
-    let target = e.target;
-    while (target != null) {
-        if (target.nodeName === 'A') {
-            // It's a link, so do nothing and let the default action proceed
+    function copyLink(customUrl) {
+        var origin = window.location.host === SHORT_HOST ? DISPLAY_ORIGIN : window.location.origin;
+        if (!navigator.clipboard) {
+            showError('Copying is not supported here');
             return;
         }
-        target = target.parentNode;
-    }
-
-    //No on click if there is a full page effect
-    if (fullPageEffectActive)
-        return;
-
-    // Prevent the default action for non-link elements
-    e.preventDefault();
-
-    // Calculate position for the confetti burst
-    var posX = e.pageX || e.touches && e.touches[0].pageX;
-    var posY = e.pageY || e.touches && e.touches[0].pageY;
-
-    var relativeX = posX / window.innerWidth;
-    var relativeY = posY / window.innerHeight;
-
-    // Burst confetti at the click/touch position
-    confetti({
-        particleCount: 20,
-        spread: 70,
-        origin: { x: relativeX, y: relativeY }
-    });
-}
-
-// Listen for both click and touchstart events to cover taps and clicks
-document.addEventListener('click', triggerConfetti);
-document.addEventListener('touchstart', triggerConfetti);
-
-
-// Handle click on the custom URL link to toggle the visibility of the input box
-document.getElementById('custom-url-link').onclick = function () {
-    const inputBox = document.getElementById('custom-url-input');
-    inputBox.style.display = inputBox.style.display === 'block' ? 'none' : 'block';
-    // Hide the link and generated URL display upon opening or closing the input box
-    document.getElementById('custom-url-link').style.display = 'none';
-    document.getElementById('generated-url-display').style.display = 'none';
-};
-
-// Function to generate a custom URL based on user input
-function generateCustomUrl() {
-    const text = document.getElementById('custom-text').value;
-    if (text.trim() === "") return;  // Prevent empty submissions
-
-    fetch('/generate-url', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text: text }),
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.customUrl) {
-                // Update the browser's history state
-                window.history.pushState({ path: data.customUrl }, '', data.customUrl);
-                // Display the custom text and hide input elements
-                document.getElementById('celebration-text').textContent = data.customText;
-                document.getElementById('custom-url-input').style.display = 'none';
-
-                // Display and configure the 'Copy Link' button
-                const display = document.getElementById('generated-url-display');
-                display.textContent = '';  // Clear previous content
-                const copyButton = document.createElement('button');
-                copyButton.textContent = 'Copy Link';
-                copyButton.onclick = copyLinkHandler(data.customUrl);
-                display.appendChild(copyButton);
-                display.style.display = 'block';
-            } else {
-                mainTextConfetti("Error creating link!", '#FF0000');
-            }
-        })
-        .catch(error => {
-            mainTextConfetti("Error creating link!", '#FF0000');
-            console.error('Error:', error);
+        navigator.clipboard.writeText(origin + customUrl).then(function () {
+            flashMessage('Link copied to clipboard!', '#00FF00');
+            customUrlLink.style.display = 'block';
+            urlDisplay.textContent = '';
+            urlDisplay.style.display = 'none';
+        }, function () {
+            showError('Error copying link!');
         });
-    // Reset the input text
-    document.getElementById('custom-text').value = '';
-}
+    }
 
-// Function to handle link copying, also manages UI updates post-copy
-function copyLinkHandler(customUrl) {
-    return function () {
-        const startURL = window.location.origin.includes('xn--dk8haa.ws')
-            ? 'https://🎉🎉🎉.ws'
-            : window.location.origin;
+    function generateCustomUrl() {
+        var text = customText.value.trim();
+        if (!text) return;
 
-        navigator.clipboard.writeText(startURL + customUrl)
-            .then(() => {
-                mainTextConfetti("Link copied to clipboard!", '#00FF00');
-                document.getElementById('custom-url-link').style.display = 'block';
-                document.getElementById('generated-url-display').textContent = '';  // Clear display
-            })
-            .catch(err => {
-                mainTextConfetti("Error copying link!", '#FF0000');
-                console.error('Error copying link: ', err);
+        fetch('/generate-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+        }).then(function (response) {
+            return response.json().then(function (data) {
+                if (!response.ok || !data.customUrl) throw new Error(data.error);
+                return data;
             });
-    };
-}
+        }).then(function (data) {
+            window.history.pushState({ path: data.customUrl }, '', data.customUrl);
+            celebrationText.textContent = data.customText;
+            customUrlInput.style.display = 'none';
+            customText.value = '';
 
-// Function to display celebratory effects and messages
-function mainTextConfetti(text, color) {
-    const mainTextElement = document.getElementById('celebration-text');
-    const originalText = mainTextElement.textContent;
+            var copyButton = document.createElement('button');
+            copyButton.type = 'button';
+            copyButton.textContent = 'Copy Link';
+            copyButton.addEventListener('click', function () { copyLink(data.customUrl); });
+            urlDisplay.textContent = '';
+            urlDisplay.appendChild(copyButton);
+            urlDisplay.style.display = 'block';
+        }).catch(function (err) {
+            showError(err && err.message);
+        });
+    }
 
-    if (fullPageEffectActive) return;  // Prevent overlapping effects
-    mainTextElement.textContent = text;
-    fullPageEffectActive = true;
-
-    confetti.reset();
-    confetti({
-        particleCount: 100,
-        spread: 160,
-        startVelocity: 30,
-        origin: { y: 0.6 },
-        colors: [color]
+    generateButton.addEventListener('click', generateCustomUrl);
+    customText.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            generateCustomUrl();
+        }
     });
 
-    setTimeout(() => {
-        mainTextElement.textContent = originalText;
-        fullPageEffectActive = false;
-    }, 3000);
-}
-
-// Function to handle key press in the input box
-function handleKeyPress(event) {
-    if (event.key === 'Enter') {
-        generateCustomUrl();  // Call generate URL function if Enter is pressed
-        event.preventDefault(); // Prevent default action (form submission)
+    function setDarkMode(dark) {
+        document.body.classList.toggle('dark-mode', dark);
+        themeButton.textContent = dark ? 'Light Mode' : 'Dark Mode';
     }
-}
 
-
-function toggleTheme() {
-    const body = document.body;
-    const button = document.getElementById('theme-toggle-button');
-
-    body.classList.toggle('dark-mode');
-
-    if (body.classList.contains('dark-mode')) {
-        button.textContent = 'Light Mode';
-    } else {
-        button.textContent = 'Dark Mode';
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        toggleTheme(); //Assuming light mode by default
-    }
-});
+    themeButton.addEventListener('click', function () {
+        setDarkMode(!document.body.classList.contains('dark-mode'));
+    });
+    setDarkMode(!!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+})();
