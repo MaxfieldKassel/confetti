@@ -10,10 +10,21 @@ const DIST_DIR = path.join(__dirname, '..', 'dist');
 const VIEWS_DIR = path.join(__dirname, 'views');
 const MESSAGES_FILE = path.join(__dirname, 'messages.json');
 
-const ALGORITHM = 'aes-256-ctr';
-const IV_LENGTH = 16;
 const MAX_MESSAGE_LENGTH = 500;
-const TOKEN_PATTERN = /^[0-9a-f]{32}:(?:[0-9a-f]{2})+:[0-9a-f]{64}$/;
+
+// Current token format (v1): base64url( version | iv | ciphertext | tag ), AES-256-GCM.
+const TOKEN_VERSION = 1;
+const GCM_IV_LENGTH = 12;
+const GCM_TAG_LENGTH = 16;
+const TOKEN_PATTERN = /^[A-Za-z0-9_-]+$/;
+const TOKEN_MIN_BYTES = 1 + GCM_IV_LENGTH + 1 + GCM_TAG_LENGTH;
+
+// Legacy format (still accepted so old links keep working):
+// hex(iv) ":" hex(AES-256-CTR ciphertext) ":" hex(HMAC-SHA256(ciphertext)).
+const LEGACY_TOKEN_PATTERN = /^[0-9a-f]{32}:(?:[0-9a-f]{2})+:[0-9a-f]{64}$/;
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_KEYS = 50_000;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -39,25 +50,94 @@ class TokenError extends Error {
 }
 
 // --- Crypto -----------------------------------------------------------------
-// Token format (unchanged, so existing links keep working):
-//   hex(iv) ":" hex(AES-256-CTR ciphertext) ":" hex(HMAC-SHA256(ciphertext))
 
-function encrypt(text, key) {
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-    const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
-    const hmac = crypto.createHmac('sha256', key).update(encrypted).digest('hex');
-    return `${iv.toString('hex')}:${encrypted.toString('hex')}:${hmac}`;
+// Derive a dedicated GCM key so the raw SECRET_KEY (used by the legacy
+// CTR+HMAC format) is never used directly with a second algorithm.
+const gcmKeys = new WeakMap();
+function gcmKey(secretKey) {
+    let key = gcmKeys.get(secretKey);
+    if (!key) {
+        key = Buffer.from(crypto.hkdfSync('sha256', secretKey, Buffer.alloc(0), 'confetti token v1 aes-256-gcm', 32));
+        gcmKeys.set(secretKey, key);
+    }
+    return key;
 }
 
-function decrypt(token, key) {
-    if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) throw new TokenError('malformed');
+function encrypt(text, secretKey) {
+    const version = Buffer.from([TOKEN_VERSION]);
+    const iv = crypto.randomBytes(GCM_IV_LENGTH);
+    const cipher = crypto.createCipheriv('aes-256-gcm', gcmKey(secretKey), iv, { authTagLength: GCM_TAG_LENGTH });
+    cipher.setAAD(version);
+    const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+    return Buffer.concat([version, iv, encrypted, cipher.getAuthTag()]).toString('base64url');
+}
+
+function decryptV1(token, secretKey) {
+    if (!TOKEN_PATTERN.test(token)) throw new TokenError('malformed');
+    const data = Buffer.from(token, 'base64url');
+    if (data.length < TOKEN_MIN_BYTES) throw new TokenError('malformed');
+    if (data[0] !== TOKEN_VERSION) throw new TokenError('unknown_version');
+    const iv = data.subarray(1, 1 + GCM_IV_LENGTH);
+    const tag = data.subarray(data.length - GCM_TAG_LENGTH);
+    const encrypted = data.subarray(1 + GCM_IV_LENGTH, data.length - GCM_TAG_LENGTH);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', gcmKey(secretKey), iv, { authTagLength: GCM_TAG_LENGTH });
+    decipher.setAAD(data.subarray(0, 1));
+    decipher.setAuthTag(tag);
+    try {
+        return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+    } catch {
+        throw new TokenError('auth_failed');
+    }
+}
+
+function decryptLegacy(token, secretKey) {
+    if (!LEGACY_TOKEN_PATTERN.test(token)) throw new TokenError('malformed');
     const [ivHex, encryptedHex, hmacHex] = token.split(':');
     const encrypted = Buffer.from(encryptedHex, 'hex');
-    const expected = crypto.createHmac('sha256', key).update(encrypted).digest();
-    if (!crypto.timingSafeEqual(expected, Buffer.from(hmacHex, 'hex'))) throw new TokenError('bad_hmac');
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, 'hex'));
+    const expected = crypto.createHmac('sha256', secretKey).update(encrypted).digest();
+    if (!crypto.timingSafeEqual(expected, Buffer.from(hmacHex, 'hex'))) throw new TokenError('auth_failed');
+    const decipher = crypto.createDecipheriv('aes-256-ctr', secretKey, Buffer.from(ivHex, 'hex'));
     return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+}
+
+function tokenVersion(token) {
+    return typeof token === 'string' && token.includes(':') ? 'legacy' : 'v1';
+}
+
+function decrypt(token, secretKey) {
+    if (typeof token !== 'string' || token.length === 0) throw new TokenError('malformed');
+    return tokenVersion(token) === 'legacy' ? decryptLegacy(token, secretKey) : decryptV1(token, secretKey);
+}
+
+// --- Rate limiting ----------------------------------------------------------
+
+// Fixed-window, in-memory, per client IP. Per-process only, which is fine for
+// a single container. Behind a reverse proxy set TRUST_PROXY, or every client
+// shares the proxy's IP (and therefore one bucket).
+function rateLimit({ max, windowMs = RATE_LIMIT_WINDOW_MS, maxKeys = RATE_LIMIT_MAX_KEYS, now = Date.now }) {
+    const hits = new Map();
+    let windowStart = now();
+
+    return (req, res, next) => {
+        if (!max) return next();
+        const t = now();
+        if (t - windowStart >= windowMs || hits.size >= maxKeys) {
+            hits.clear();
+            windowStart = t;
+        }
+        const count = (hits.get(req.ip) || 0) + 1;
+        hits.set(req.ip, count);
+        const remaining = Math.max(0, max - count);
+        const resetSeconds = Math.ceil((windowStart + windowMs - t) / 1000);
+        res.set({ 'RateLimit-Limit': String(max), 'RateLimit-Remaining': String(remaining), 'RateLimit-Reset': String(resetSeconds) });
+        if (count > max) {
+            res.locals.logFields = { reason: 'rate_limited' };
+            if (count === max + 1) req.log.warn('Rate limit exceeded', { ip: req.ip, limit: max, windowMs });
+            res.set('Retry-After', String(resetSeconds));
+            return res.status(429).json({ error: 'Too many links created. Please wait a minute and try again.' });
+        }
+        next();
+    };
 }
 
 // --- Helpers ----------------------------------------------------------------
@@ -81,6 +161,13 @@ function loadSecretKey(env = process.env) {
     const buffer = Buffer.from(key, 'utf8');
     if (buffer.length !== 32) throw new Error(`SECRET_KEY must be exactly 32 bytes (got ${buffer.length})`);
     return buffer;
+}
+
+function parseRateLimit(value) {
+    if (value === undefined || value === '') return 30;
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0) throw new Error(`RATE_LIMIT_PER_MINUTE must be a non-negative integer (got "${value}")`);
+    return n; // 0 disables
 }
 
 function parseTrustProxy(value) {
@@ -153,7 +240,7 @@ function errorHandler(logger) {
 
 // --- App --------------------------------------------------------------------
 
-function createApp({ secretKey, messages, logger = createLogger(), trustProxy = false }) {
+function createApp({ secretKey, messages, logger = createLogger(), trustProxy = false, rateLimitPerMinute = 30 }) {
     const app = express();
     app.disable('x-powered-by');
     app.set('trust proxy', trustProxy);
@@ -171,7 +258,7 @@ function createApp({ secretKey, messages, logger = createLogger(), trustProxy = 
         res.render('index', { message: messageOfTheDay(messages) });
     });
 
-    app.post('/generate-url', express.json({ limit: '8kb' }), (req, res) => {
+    app.post('/generate-url', rateLimit({ max: rateLimitPerMinute }), express.json({ limit: '8kb' }), (req, res) => {
         const text = cleanMessage(req.body?.text);
         if (!text) {
             res.locals.logFields = { reason: 'empty' };
@@ -182,20 +269,22 @@ function createApp({ secretKey, messages, logger = createLogger(), trustProxy = 
             return res.status(400).json({ error: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer.` });
         }
         res.locals.logFields = { messageLength: text.length };
-        res.json({ customUrl: `/custom/${encodeURIComponent(encrypt(text, secretKey))}`, customText: text });
+        res.json({ customUrl: `/custom/${encrypt(text, secretKey)}`, customText: text });
     });
 
     app.get('/custom/:token', (req, res) => {
+        const version = tokenVersion(req.params.token);
         let message;
         try {
             message = cleanMessage(decrypt(req.params.token, secretKey));
             if (!message) throw new TokenError('empty');
         } catch (err) {
             if (!(err instanceof TokenError)) throw err;
-            res.locals.logFields = { tokenError: err.reason };
-            req.log.warn('Rejected custom URL', { reason: err.reason, tokenLength: req.params.token.length });
+            res.locals.logFields = { tokenVersion: version, tokenError: err.reason };
+            req.log.warn('Rejected custom URL', { reason: err.reason, tokenVersion: version, tokenLength: req.params.token.length });
             return res.redirect('/');
         }
+        res.locals.logFields = { tokenVersion: version };
         res.set('Cache-Control', 'no-store');
         res.render('index', { message });
     });
@@ -225,8 +314,10 @@ function start() {
     });
 
     let secretKey;
+    let rateLimitPerMinute;
     try {
         secretKey = loadSecretKey();
+        rateLimitPerMinute = parseRateLimit(process.env.RATE_LIMIT_PER_MINUTE);
     } catch (err) {
         logger.error('Invalid configuration, refusing to start', { reason: err.message });
         process.exit(1);
@@ -235,7 +326,7 @@ function start() {
     const messages = JSON.parse(fs.readFileSync(MESSAGES_FILE, 'utf8'));
     const port = Number(process.env.PORT) || 80;
     const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
-    const app = createApp({ secretKey, messages, logger, trustProxy });
+    const app = createApp({ secretKey, messages, logger, trustProxy, rateLimitPerMinute });
 
     const server = app.listen(port, (err) => {
         if (err) {
@@ -249,6 +340,7 @@ function start() {
             nodeEnv: process.env.NODE_ENV,
             logLevel: logger.level,
             trustProxy,
+            rateLimitPerMinute,
             messages: messages.length,
         });
     });
@@ -280,7 +372,9 @@ module.exports = {
     cleanMessage,
     messageOfTheDay,
     loadSecretKey,
+    parseRateLimit,
     parseTrustProxy,
+    rateLimit,
     redactPath,
     MAX_MESSAGE_LENGTH,
 };

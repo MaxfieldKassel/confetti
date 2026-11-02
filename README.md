@@ -2,11 +2,11 @@
 
 <div align="center">
 <div style="display: inline-block; width: 49%;">
-    <img src="dark-mode.gif" alt="Dark Mode" style="max-width: 100%; height: auto;"/>
+    <img src="dark-mode.webp" alt="Dark Mode" style="max-width: 100%; height: auto;"/>
     Dark Mode
   </div>
 <div style="display: inline-block; width: 49%;">
-    <img src="light-mode.gif" alt="Light Mode" style="max-width: 100%; height: auto;"/>
+    <img src="light-mode.webp" alt="Light Mode" style="max-width: 100%; height: auto;"/>
     Light Mode
   </div>
   
@@ -14,13 +14,14 @@
   <h1><a href="https://🎉🎉🎉.ws">🎉🎉🎉.ws</a></h1>
   <br>
 </div>
-This project is a simple web application that displays celebratory messages with confetti effects. It includes functionality for generating custom, encrypted URLs, ensuring that the message can only be viewed by opening the URL. No data is stored on the server, making the application highly scalable and secure. It also includes dark and light mode, defaulting to the user's system preference.
+This project is a simple web application that displays celebratory messages with confetti effects. It includes functionality for generating custom URLs encrypted with AES-256-GCM, ensuring that the message can only be viewed by opening the URL. No data is stored on the server, making the application highly scalable and secure. It also includes dark and light mode, defaulting to the user's system preference.
 
 ## Usage
 
 ### Prerequisites
 
-- [Nix](https://nixos.org) with flakes (recommended), **or** Node.js 24+ (26 LTS recommended).
+- [Nix](https://nixos.org) with flakes to build the package / Docker image.
+- Node.js 24+ (26 LTS recommended) for local development (or use `nix develop`).
 
 ### Environment Variables
 
@@ -31,7 +32,8 @@ This project is a simple web application that displays celebratory messages with
 | `PORT` | `80` | Port to listen on. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` or `silent`. |
 | `LOG_FORMAT` | `json` (`text` on a TTY) | `json` = one object per line, `text` = human readable. |
-| `TRUST_PROXY` | off | Express [trust proxy](https://expressjs.com/en/guide/behind-proxies.html) value (`true`, hop count, `loopback`, subnets). Set it behind a reverse proxy so client IPs are logged correctly. |
+| `RATE_LIMIT_PER_MINUTE` | `30` | Max links each client IP can create per minute (`0` disables). In-memory, per process. |
+| `TRUST_PROXY` | off | Express [trust proxy](https://expressjs.com/en/guide/behind-proxies.html) value (`true`, hop count, `loopback`, subnets). Set it behind a reverse proxy so client IPs are logged and rate limited correctly. |
 
 Locally these can go in a `.env` file in the project root (loaded automatically; real environment variables win). The server refuses to start if the key is missing or not 32 bytes.
 
@@ -61,21 +63,15 @@ dd if=/dev/urandom bs=16 count=1 2>/dev/null | xxd -p -c 32
 
 ### Building and Running
 
-#### Docker image via Nix (recommended)
+#### Docker image (via Nix)
 
 ```bash
 nix build .#dockerImage
 docker load < result
-docker run -p 80:80 -e SECRET_KEY=... confetti:1.1.0
+docker run -p 80:80 -e SECRET_KEY=... confetti:1.2.0
 ```
 
 The image runs as an unprivileged user, contains only `node` (slim) and the production dependencies, and logs JSON to stdout (`docker logs`). The plain package is `nix build` (runs the tests as part of the build), and there is a NixOS module at `nixosModules.default` (`services.confetti`).
-
-#### Docker without Nix
-
-```bash
-docker-compose up --build
-```
 
 #### Local Development
 
@@ -90,7 +86,7 @@ Or `nix develop` for a shell with the right Node version.
 
 ### Logging
 
-Every request produces one log line (method, path, status, duration, IP, user agent, request ID). The request ID is also returned in the `X-Request-Id` header, so a user-reported problem can be matched to its log line. Rejected custom URLs are logged at `warn` with the reason (`malformed`, `bad_hmac` — e.g. after a key rotation — or `empty`). Unexpected errors are logged at `error` with a stack trace, and startup/shutdown are logged too.
+Every request produces one log line (method, path, status, duration, IP, user agent, request ID). The request ID is also returned in the `X-Request-Id` header, so a user-reported problem can be matched to its log line. Custom URL requests include `tokenVersion` (`v1` or `legacy`). Rejected ones are logged at `warn` with the reason (`malformed`, `auth_failed` — e.g. after a key rotation — `unknown_version` or `empty`). Rate-limited clients get a `429` and one `warn` line per window. Unexpected errors are logged at `error` with a stack trace, and startup/shutdown are logged too.
 
 **Message contents and URL tokens are never logged** (custom URLs appear as `/custom/:token`). `GET /healthz` returns `ok` for health checks and is only logged at `debug`.
 

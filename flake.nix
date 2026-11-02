@@ -52,6 +52,12 @@
               '';
             };
 
+            rateLimitPerMinute = lib.mkOption {
+              type = lib.types.ints.unsigned;
+              default = 30;
+              description = "Max custom links per client IP per minute (0 disables).";
+            };
+
             openFirewall = lib.mkOption {
               type = lib.types.bool;
               default = false;
@@ -69,6 +75,7 @@
                 PORT = toString cfg.port;
                 LOG_LEVEL = cfg.logLevel;
                 LOG_FORMAT = "json";
+                RATE_LIMIT_PER_MINUTE = toString cfg.rateLimitPerMinute;
               } // lib.optionalAttrs (cfg.trustProxy != null) {
                 TRUST_PROXY = cfg.trustProxy;
               };
@@ -122,7 +129,7 @@
             ];
           };
 
-          npmDepsHash = "sha256-VAL9r6vnMv+IOGWG51N94MtvDJCCLj17aJk+3y0pQAc=";
+          npmDepsHash = "sha256-B0Ods8UrpNXv/aLFRiugyAh/9yJqE/3nyOC/kB8rAm8=";
 
           inherit nodejs;
           nativeBuildInputs = [ pkgs.makeBinaryWrapper pkgs.removeReferencesTo ];
@@ -163,7 +170,8 @@
         packages = {
           default = confetti;
           inherit confetti;
-
+        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # Linux only: images must contain Linux binaries.
           # docker load < $(nix build .#dockerImage --print-out-paths)
           dockerImage = pkgs.dockerTools.buildLayeredImage {
             name = "confetti";

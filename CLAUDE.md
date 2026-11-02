@@ -29,7 +29,7 @@ After changing `package-lock.json`, update `npmDepsHash` in `flake.nix` (build o
 
 ## Environment
 
-`SECRET_KEY` (32 bytes, `openssl rand -hex 16`) or `SECRET_KEY_FILE`; optional `PORT` (80), `LOG_LEVEL` (info), `LOG_FORMAT` (json/text), `TRUST_PROXY`. A `.env` file is loaded via `process.loadEnvFile()`. The server exits at startup if the key is invalid.
+`SECRET_KEY` (32 bytes, `openssl rand -hex 16`) or `SECRET_KEY_FILE`; optional `PORT` (80), `LOG_LEVEL` (info), `LOG_FORMAT` (json/text), `TRUST_PROXY`, `RATE_LIMIT_PER_MINUTE` (30, 0 = off). A `.env` file is loaded via `process.loadEnvFile()`. The server exits at startup if the key is invalid.
 
 ## Architecture
 
@@ -37,7 +37,9 @@ After changing `package-lock.json`, update `npmDepsHash` in `flake.nix` (build o
 
 **Server (`private/server.js`):** `createApp()` (exported for tests) + `start()` (env, signals, graceful shutdown). Routes:
 - `GET /` — daily message from `private/messages.json` (UTC day of year)
-- `POST /generate-url` — encrypts text (AES-256-CTR + HMAC-SHA256, format `iv:ciphertext:hmac` hex) into `/custom/<token>`; max 500 chars
+- `POST /generate-url` — encrypts text into `/custom/<token>`; max 500 chars; in-memory per-IP rate limit
+  - v1 token: base64url(`0x01` | 12-byte IV | ciphertext | 16-byte tag), AES-256-GCM, key = HKDF(SECRET_KEY), version byte as AAD
+  - legacy token (still decrypted, never issued): hex `iv:ciphertext:hmac`, AES-256-CTR + HMAC-SHA256 with the raw key; detected by `:`
 - `GET /custom/:token` — decrypts and renders; invalid tokens redirect to `/`
 - `GET /healthz` — `ok`
 
